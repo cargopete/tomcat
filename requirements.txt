@@ -1,0 +1,5 @@
+# Install via apt on Raspberry Pi OS Lite (recommended):
+#   sudo apt install -y python3-pigpio python3-gpiozero
+# These are listed here for reference / non-Debian environments.
+pigpio>=1.78
+gpiozero>=2.0

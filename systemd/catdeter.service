@@ -1,0 +1,14 @@
+[Unit]
+Description=TomCat ultrasonic cat deterrent
+After=network.target pigpiod.service
+Requires=pigpiod.service
+
+[Service]
+Type=simple
+User=pi
+ExecStart=/usr/bin/python3 /home/pi/tomcat/src/catdeter.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

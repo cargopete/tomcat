@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Runtime data
+*.sqlite3
+*.db
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
