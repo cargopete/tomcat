@@ -22,7 +22,7 @@ jobs:
         run: ruff check .
 
       - name: Compile-check all sources
-        run: python -m compileall -q src
+        run: python -m compileall -q src dashboard
 
       - name: Tests (pytest)
         run: pytest -q

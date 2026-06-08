@@ -18,7 +18,8 @@ square wave; an **IRLZ44N** logic-level MOSFET switches a piezo horn against a
 | `src/pir_test.py` | Standalone PIR sanity check |
 | `src/tone_sweep.py` | Hardware-PWM 20→24 kHz sweep, for spectrum-analyser verification |
 | `src/catdeter.py` | The main program: PIR → burst, quiet hours, cooldown, SQLite logging |
-| `systemd/catdeter.service` | systemd unit to run it on boot |
+| `dashboard/app.py` | Read-only Flask web view: fires/day, hour-of-day histogram, recent events |
+| `systemd/*.service` | systemd units for the deterrent and (optionally) the dashboard |
 | `docs/BUILD.md` | The complete beginner build guide: electronics, wiring, BOM, weatherproofing, dog safety |
 
 ## Hardware in one breath
@@ -105,6 +106,27 @@ Full list with comments in [`.env.example`](.env.example).
 - Use the **IRLZ44N**, not the IRFZ44N — the latter won't switch fully from 3.3 V.
 - Watch the dogs closely for the first week and back off if they show distress.
 
+## Dashboard
+
+A small read-only web view of the event log — total fires, fires in the last
+24 h, suppressed (quiet-hours/cooldown) counts, a fires-by-hour histogram, a
+per-day table, and the most recent detections. No JavaScript, no build step.
+
+```bash
+pip install -r dashboard/requirements.txt
+python dashboard/app.py            # serves on http://<pi-ip>:8080/
+```
+
+Or run it on boot alongside the deterrent:
+
+```bash
+sudo cp ~/tomcat/systemd/catdeter-dashboard.service /etc/systemd/system/
+sudo systemctl enable --now catdeter-dashboard.service
+```
+
+It reads the same `TOMCAT_DB_PATH` as the deterrent and opens the DB read-only,
+so it can never disturb the log.
+
 ## Development
 
 The hardware-free logic (quiet-hours windowing, etc.) is unit-tested and runs
@@ -122,10 +144,10 @@ CI runs the same lint + compile + tests on every push and PR.
 
 ## Roadmap
 
-- 10-second camera clip per detection
-- Flask/FastAPI dashboard over the SQLite `events` table
-- v2 board: anti-phase H-bridge (+6 dB) and LC resonance boost
-- Eventual Rust port using `rppal`
+- [x] Flask dashboard over the SQLite `events` table
+- [ ] 10-second camera clip per detection
+- [ ] v2 board: anti-phase H-bridge (+6 dB) and LC resonance boost
+- [ ] Eventual Rust port using `rppal`
 
 ## Licence
 

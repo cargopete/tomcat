@@ -1,0 +1,3 @@
+# Dashboard runtime dependency. Install on the Pi only if you want the web view.
+#   pip install -r dashboard/requirements.txt
+flask>=3.0

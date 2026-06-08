@@ -8,9 +8,10 @@ import sys
 import types
 from pathlib import Path
 
-# Make src/ importable as top-level modules.
-SRC = Path(__file__).resolve().parent.parent / "src"
-sys.path.insert(0, str(SRC))
+# Make src/ and dashboard/ importable as top-level modules.
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(ROOT / "dashboard"))
 
 # Minimal pigpio stub: only the attributes touched at import time / module
 # scope need to exist. Nothing here is exercised by the logic tests.
