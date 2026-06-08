@@ -78,11 +78,25 @@ journalctl -u catdeter -f
 
 ## Tuning
 
-Knobs live at the top of `src/catdeter.py`:
+Every knob has a sane default in `src/catdeter.py` and can be overridden with a
+`TOMCAT_*` environment variable — so you tune without editing source. Copy
+[`.env.example`](.env.example) to `.env`, edit, and the systemd unit picks it up
+(`EnvironmentFile=-/home/pi/tomcat/.env`):
 
-- `DUTY` — `500_000` is 50 % (full). Start at `250_000` (25 %, ~6 dB quieter) for week one.
-- `QUIET_START_H` / `QUIET_END_H` — default 22:00–07:00, no firing at night.
-- `BURST_SECONDS`, `COOLDOWN_S` — burst length and minimum gap between bursts.
+```bash
+cp .env.example .env
+# e.g. half volume for week one:
+echo 'TOMCAT_DUTY=250000' >> .env
+sudo systemctl restart catdeter
+```
+
+Key settings:
+
+- `TOMCAT_DUTY` — `500000` is 50 % (full). Start at `250000` (25 %, ~6 dB quieter) for week one.
+- `TOMCAT_QUIET_START_H` / `TOMCAT_QUIET_END_H` — default 22:00–07:00, no firing at night.
+- `TOMCAT_BURST_SECONDS`, `TOMCAT_COOLDOWN_S` — burst length and minimum gap between bursts.
+
+Full list with comments in [`.env.example`](.env.example).
 
 ## Safety notes (the short version)
 

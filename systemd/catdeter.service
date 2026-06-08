@@ -6,6 +6,9 @@ Requires=pigpiod.service
 [Service]
 Type=simple
 User=pi
+# Optional: tuning via env vars. Copy .env.example -> .env and edit.
+# The '-' prefix makes the file optional (no failure if it's absent).
+EnvironmentFile=-/home/pi/tomcat/.env
 ExecStart=/usr/bin/python3 /home/pi/tomcat/src/catdeter.py
 Restart=on-failure
 RestartSec=5

@@ -12,6 +12,9 @@ venv/
 *.sqlite3
 *.db
 
+# Local config (keep .env.example tracked)
+.env
+
 # Editor / OS
 .DS_Store
 .idea/
