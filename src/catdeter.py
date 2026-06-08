@@ -11,13 +11,14 @@ TomCat - a CATWatch-style PIR-triggered ultrasonic cat deterrent.
 
 See docs/BUILD.md for the full build, wiring and dog-safety guidance.
 """
-import pigpio
-import time
-import sqlite3
 import datetime
 import signal
+import sqlite3
 import sys
+import time
 from pathlib import Path
+
+import pigpio
 
 # -------- CONFIG (edit me) --------
 PIR_GPIO = 17
@@ -35,13 +36,18 @@ DB_PATH = Path.home() / "catdeter.sqlite3"
 # ----------------------------------
 
 
-def in_quiet_hours(now=None):
+def in_quiet_hours(now=None, start_h=QUIET_START_H, end_h=QUIET_END_H):
+    """True if `now` falls inside the quiet window [start_h, end_h).
+
+    Handles a window that wraps past midnight (e.g. 22 -> 7). If start == end
+    the window is empty (quiet hours disabled).
+    """
     h = (now or datetime.datetime.now()).hour
-    if QUIET_START_H == QUIET_END_H:
+    if start_h == end_h:
         return False
-    if QUIET_START_H < QUIET_END_H:
-        return QUIET_START_H <= h < QUIET_END_H
-    return h >= QUIET_START_H or h < QUIET_END_H
+    if start_h < end_h:
+        return start_h <= h < end_h
+    return h >= start_h or h < end_h
 
 
 def open_db():

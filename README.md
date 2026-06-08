@@ -34,8 +34,23 @@ enclosure. Full bill of materials with elimex.bg product links in
 |---|---|---|
 | 2  | 5 V     | PIR VCC |
 | 6  | GND     | Common ground (**must** be shared with the 12 V supply ground) |
-| 11 | GPIO17  | PIR OUT |
+| 11 | GPIO17  | PIR OUT (**via voltage divider — see below**) |
 | 12 | GPIO18 (PWM0) | Hardware PWM to MOSFET gate |
+
+> ### ⚠️ Protect GPIO17 from the PIR's 4 V output
+> The SEN0018's OUT pin drives **4 V** HIGH, but the Pi's GPIO absolute maximum
+> input is **3.3 V**. The Pi reads it as a logic HIGH either way, and many
+> builders wire it direct without immediate damage — but the formally-correct,
+> Pi-protecting wiring is a two-resistor divider that drops 4 V to ~2.7 V:
+>
+> ```
+>   PIR OUT ──[ 10 kΩ ]──┬── GPIO17 (pin 11)
+>                        │
+>                     [ 22 kΩ ]
+>                        │
+>                       GND
+> ```
+> Recommended default. See [docs/BUILD.md "Caveats"](docs/BUILD.md) for the full reasoning.
 
 ## Quick start
 
@@ -75,6 +90,21 @@ Knobs live at the top of `src/catdeter.py`:
 - The 12 V supply ground **must** be tied to the Pi's GND — non-negotiable.
 - Use the **IRLZ44N**, not the IRFZ44N — the latter won't switch fully from 3.3 V.
 - Watch the dogs closely for the first week and back off if they show distress.
+
+## Development
+
+The hardware-free logic (quiet-hours windowing, etc.) is unit-tested and runs
+on any machine — `pigpio` is stubbed in tests, so you don't need a Pi to hack
+on it:
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+ruff check .      # lint
+pytest -q         # tests
+```
+
+CI runs the same lint + compile + tests on every push and PR.
 
 ## Roadmap
 

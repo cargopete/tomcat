@@ -4,8 +4,9 @@
 Wave a hand in front of the DFRobot SEN0018 and you should see MOTION printed.
 The sensor is wired to BCM17 (physical pin 11). See docs/BUILD.md section 4.1.
 """
-from gpiozero import MotionSensor
 from time import sleep
+
+from gpiozero import MotionSensor
 
 pir = MotionSensor(17)  # BCM17 = physical pin 11
 

@@ -5,8 +5,9 @@ Use a phone spectrum analyser (Spectroid on Android, SpectrumView on iOS)
 within ~50 cm of the horn to confirm a clear peak between 20 and 24 kHz.
 You will not hear anything - that is the entire point. See docs/BUILD.md 4.2.
 """
-import pigpio
 import time
+
+import pigpio
 
 PWM_GPIO = 18          # BCM18 = pin 12 = hardware PWM0
 F_LOW_HZ = 20_000

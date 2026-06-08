@@ -3,7 +3,10 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
+.venv-dev/
 venv/
+.pytest_cache/
+.ruff_cache/
 
 # Runtime data
 *.sqlite3
