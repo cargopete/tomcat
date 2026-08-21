@@ -45,8 +45,9 @@ For a 3.3 V Pi GPIO to fully switch the MOSFET, the gate threshold must be ≤ ~
 - 220 Ω: red-red-brown-gold
 - 1 kΩ: brown-black-red-gold
 - 10 kΩ: brown-black-orange-gold
+- 22 kΩ: red-red-orange-gold
 
-The **10 kΩ gate-to-source pull-down** matters: when the Pi is rebooting or the GPIO is in input mode, the gate floats and even ESD on your finger can switch the MOSFET on. The pull-down forces OFF whenever the Pi isn't actively driving HIGH. The **220 Ω gate-drive resistor** between GPIO18 and the MOSFET gate slows the in-rush into the gate capacitance so the Pi GPIO doesn't have to source a hard pulse.
+The **10 kΩ gate-to-source pull-down** matters: when the Pi is rebooting or the GPIO is in input mode, the gate floats and even ESD on your finger can switch the MOSFET on. The pull-down forces OFF whenever the Pi isn't actively driving HIGH. The **220 Ω gate-drive resistor** between GPIO18 and the MOSFET gate slows the in-rush into the gate capacitance so the Pi GPIO doesn't have to source a hard pulse. The **10 kΩ / 22 kΩ pair on the PIR OUT line** (R_d1 / R_d2 in §2.3) is a voltage divider: the SEN0018 drives its OUT pin to 4 V, which is over the Pi's 3.3 V absolute-maximum input, and the pair scales that to 4 × 22 / (10 + 22) ≈ 2.7 V — still a comfortable logic HIGH, and within spec.
 
 **1.6 Safety basics.**
 - 12 V DC is low-risk. Don't short the 12 V rail to ground; don't open the sealed adapter.
@@ -63,7 +64,7 @@ The **10 kΩ gate-to-source pull-down** matters: when the Pi is rebooting or the
 |---|---|---|
 | 2 | 5 V | PIR V<sub>CC</sub> |
 | 6 | GND | Common ground |
-| 11 | GPIO17 (BCM17) | PIR OUT input |
+| 11 | GPIO17 (BCM17) | PIR OUT input, via the 10 kΩ / 22 kΩ divider — see §2.3 |
 | 12 | GPIO18 (BCM18) — **PWM0** | Hardware PWM to MOSFET gate |
 
 GPIO18 is the canonical PWM0 pin: the official `dtoverlay=pwm-2chan` overlay defaults to GPIO18 (PWM0) and GPIO19 (PWM1).
@@ -104,7 +105,11 @@ GPIO18 is the canonical PWM0 pin: the official `dtoverlay=pwm-2chan` overlay def
                           │
                   PIR sensor GND
                   PIR sensor VCC ───── Pi 5V  (pin 2)
-                  PIR sensor OUT ───── Pi GPIO17 (pin 11)
+                  PIR sensor OUT ──[R_d1 10kΩ]──┬── Pi GPIO17 (pin 11)
+                                                │
+                                          [R_d2 22kΩ]
+                                                │
+                                         COMMON GROUND
 ```
 
 **The critical beginner rule:** the 12 V supply ground **must** be joined to the Pi's GND. The MOSFET source goes to that same common ground. Without a common ground the MOSFET has no reference for "what is 3.3 V at the gate", and the circuit will behave erratically or not at all.
@@ -115,7 +120,9 @@ GPIO18 is the canonical PWM0 pin: the official `dtoverlay=pwm-2chan` overlay def
 |---|---|---|
 | Pi pin 2 (5 V) | PIR `VCC` | Red lead of the supplied DFRobot Gravity cable |
 | Pi pin 6 (GND) | PIR `GND` | Black lead |
-| Pi pin 11 (GPIO17) | PIR `OUT` | Goes HIGH (4 V per DFRobot) on motion |
+| PIR `OUT` | One end of R_d1 (10 kΩ) | OUT goes HIGH at **4 V** (per DFRobot) on motion; the divider drops that to ~2.7 V |
+| Other end of R_d1 | Pi pin 11 (GPIO17) | The divider mid-node — this is what the Pi reads |
+| Divider mid-node (GPIO17) | Common ground rail, through R_d2 (22 kΩ) | Lower leg of the divider |
 | Pi pin 12 (GPIO18) | One end of R_g (220 Ω) | Gate-drive resistor |
 | Other end of R_g | MOSFET Gate (leg 1, leftmost with label facing you) | |
 | MOSFET Gate | One end of R_pd (10 kΩ) | Pull-down |
@@ -139,6 +146,7 @@ GPIO18 is the canonical PWM0 pin: the official `dtoverlay=pwm-2chan` overlay def
 2. Insert the GOODRAM 32 GB microSD using its included SD adapter.
 3. In Imager, choose *Raspberry Pi OS Lite (64-bit)*.
 4. Click the ⚙ gear: hostname (`catdeter`), enable SSH with a strong password, set Wi-Fi SSID + password, set locale + keyboard. Save.
+   Set the **username to `pi`** — the Imager forces you to choose one and offers no default, and both systemd units plus every path in this guide assume `pi` and `/home/pi/tomcat`. Pick anything else and you must edit `systemd/*.service` (`User=`, `WorkingDirectory=`, `ExecStart=`, `EnvironmentFile=`) to match.
 5. Write and eject.
 
 **Step 2 — First boot, SSH in, update.**
@@ -157,7 +165,7 @@ sudo systemctl enable --now pigpiod
 
 **Step 6 — Combine into the full program** (`src/catdeter.py`) and test end-to-end.
 
-**Step 7 — Move to soldered perfboard.** Use elimex's universal board from category 948 / product 24400 ("ПЛАТКА ELIMEX"). Layout: screw terminal for 12 V in, screw terminal for piezo, header pins for the Pi GPIO cable, then the IRLZ44N, the three resistors, the diode. Solder one component at a time; multimeter beep-test continuity after each. Add a small heatsink + thermal pad to the Pi 4's main SoC.
+**Step 7 — Move to soldered perfboard.** Use elimex's universal board from category 948 / product 24400 ("ПЛАТКА ELIMEX"). Layout: screw terminal for 12 V in, screw terminal for piezo, header pins for the Pi GPIO cable, then the IRLZ44N, the five resistors (R_g, R_pd, R_s and the two divider legs R_d1 / R_d2), the diode. Solder one component at a time; multimeter beep-test continuity after each. Add a small heatsink + thermal pad to the Pi 4's main SoC.
 
 **Step 8 — Mount in the enclosure** (elimex product 68216, ABS 200×120×75 mm IP66):
 1. Cut a hole for the F28 horn through the front face; bed in clear neutral-cure silicone, cure 24 h.
@@ -175,10 +183,16 @@ The runnable copies live in [`../src/`](../src/). They are reproduced here for r
 **4.1 `src/pir_test.py`**
 ```python
 #!/usr/bin/env python3
-from gpiozero import MotionSensor
+"""Standalone PIR sanity check.
+
+Wave a hand in front of the DFRobot SEN0018 and you should see MOTION printed.
+The sensor is wired to BCM17 (physical pin 11). See docs/BUILD.md section 4.1.
+"""
 from time import sleep
 
-pir = MotionSensor(17)   # BCM17 = physical pin 11
+from gpiozero import MotionSensor
+
+pir = MotionSensor(17)  # BCM17 = physical pin 11
 
 print("Warming up PIR for 30 s...")
 sleep(30)
@@ -194,22 +208,29 @@ while True:
 **4.2 `src/tone_sweep.py` — pigpio hardware PWM frequency sweep**
 ```python
 #!/usr/bin/env python3
-"""Sweep 20 kHz -> 24 kHz on GPIO18 (PWM0) using pigpio hardware PWM."""
-import pigpio, time
+"""Sweep 20 kHz -> 24 kHz on GPIO18 (PWM0) using pigpio hardware PWM.
 
-PWM_GPIO   = 18           # BCM18 = pin 12 = hardware PWM0
-F_LOW_HZ   = 20_000
-F_HIGH_HZ  = 24_000
-SWEEP_STEP = 250          # Hz per tick
-TICK_S     = 0.020        # 20 ms per step
-DUTY       = 500_000      # 50 %  (range 0..1_000_000)
+Use a phone spectrum analyser (Spectroid on Android, SpectrumView on iOS)
+within ~50 cm of the horn to confirm a clear peak between 20 and 24 kHz.
+You will not hear anything - that is the entire point. See docs/BUILD.md 4.2.
+"""
+import time
+
+import pigpio
+
+PWM_GPIO = 18          # BCM18 = pin 12 = hardware PWM0
+F_LOW_HZ = 20_000
+F_HIGH_HZ = 24_000
+SWEEP_STEP = 250       # Hz per tick
+TICK_S = 0.020         # 20 ms per step
+DUTY = 500_000         # 50 %  (range 0..1_000_000)
 
 pi = pigpio.pi()
 if not pi.connected:
     raise SystemExit("pigpio daemon not running. sudo systemctl start pigpiod")
 
 try:
-    print("Sweeping. Use Spectroid on your phone to verify 20–24 kHz peaks.")
+    print("Sweeping. Use Spectroid on your phone to verify 20-24 kHz peaks.")
     while True:
         f = F_LOW_HZ
         direction = +SWEEP_STEP
@@ -248,6 +269,9 @@ Requires=pigpiod.service
 [Service]
 Type=simple
 User=pi
+# Optional: tuning via env vars. Copy .env.example -> .env and edit.
+# The '-' prefix makes the file optional (no failure if it's absent).
+EnvironmentFile=-/home/pi/tomcat/.env
 ExecStart=/usr/bin/python3 /home/pi/tomcat/src/catdeter.py
 Restart=on-failure
 RestartSec=5
@@ -262,7 +286,41 @@ sudo systemctl enable --now catdeter.service
 journalctl -u catdeter -f
 ```
 
-**4.5 Forward-looking.** The `events` SQLite table can later feed a tiny Flask/FastAPI dashboard so you see when and how often the device fires; a USB or Pi Camera can record a 10-s clip per detection. A Rust port using `rppal` + the `pigpio` Rust bindings is straightforward later — for now stay on Python.
+**4.5 Tuning without editing the source.** Every setting in `catdeter.py` — GPIO numbers, sweep limits, duty cycle, burst length, cool-down, quiet hours, DB path — reads from a `TOMCAT_*` environment variable and falls back to the literal in the source. The systemd unit above pulls those from an optional `.env` beside the code, so you tune the device without ever touching Python:
+
+```bash
+cp ~/tomcat/.env.example ~/tomcat/.env
+nano ~/tomcat/.env            # uncomment and edit what you need
+sudo systemctl restart catdeter
+```
+
+The `-` in `EnvironmentFile=-/home/pi/tomcat/.env` makes the file optional, so the service still starts if you never create one. The knobs you are most likely to want:
+
+| Variable | Default | What it does |
+|---|---|---|
+| `TOMCAT_DUTY` | `500000` | Duty cycle, range 0–1 000 000. `500000` = 50 % (full); `250000` = 25 %, roughly 6 dB quieter — the recommended week-one setting |
+| `TOMCAT_BURST_SECONDS` | `4.0` | Length of one ultrasonic burst |
+| `TOMCAT_COOLDOWN_S` | `8.0` | Minimum gap between bursts |
+| `TOMCAT_QUIET_START_H` / `TOMCAT_QUIET_END_H` | `22` / `7` | Quiet window, 24 h clock. Wraps past midnight; set both equal to disable |
+| `TOMCAT_DB_PATH` | `~/catdeter.sqlite3` | Where the event log lives |
+
+The full annotated list is in [`../.env.example`](../.env.example).
+
+**4.6 The dashboard.** A read-only Flask view over the same `events` table lives in [`../dashboard/app.py`](../dashboard/app.py): total fires, fires in the last 24 h, suppressed (quiet-hours / cool-down) counts, a fires-by-hour histogram, a per-day table and the most recent detections. No JavaScript, no build step. It opens the DB read-only, so it cannot disturb the log.
+
+```bash
+pip install -r ~/tomcat/dashboard/requirements.txt
+python3 ~/tomcat/dashboard/app.py          # http://<pi-ip>:8080/
+```
+
+To run it on boot alongside the deterrent, install the second unit — it reads the same `.env`, so it picks up `TOMCAT_DB_PATH` automatically:
+
+```bash
+sudo cp ~/tomcat/systemd/catdeter-dashboard.service /etc/systemd/system/
+sudo systemctl enable --now catdeter-dashboard.service
+```
+
+**4.7 Forward-looking.** A USB or Pi Camera can record a 10-s clip per detection. A Rust port using `rppal` + the `pigpio` Rust bindings is straightforward later — for now stay on Python.
 
 ### 5. The Piezo Drive — Loudness & Correctness
 
@@ -273,7 +331,7 @@ journalctl -u catdeter -f
 - **Anti-phase / H-bridge drive (v2 upgrade).** Two MOSFETs driven from BCM18 (PWM0) and BCM19 (PWM1) 180° out of phase give the piezo ±V<sub>rail</sub> swings instead of 0…V<sub>rail</sub> — about +6 dB.
 - **LC resonance boost (advanced).** A 1–2 mH series inductor with the piezo's ~30–80 nF resonates near 20 kHz and steps up the voltage across the piezo significantly. Needs an oscilloscope to tune.
 
-**5.3 Duty cycle and harmonics.** A 50 % duty-cycle square wave at 20 kHz has odd harmonics at 60 kHz, 100 kHz … All inaudible to humans, all in the cat-audible range, and the F28 rolls them off naturally above ~30 kHz so we don't waste energy. To **reduce loudness** (for dog-friendliness or testing), set `DUTY = 250_000` (25 %): less RMS energy in the fundamental, ~6 dB quieter.
+**5.3 Duty cycle and harmonics.** A 50 % duty-cycle square wave at 20 kHz has odd harmonics at 60 kHz, 100 kHz … All inaudible to humans, all in the cat-audible range, and the F28 rolls them off naturally above ~30 kHz so we don't waste energy. To **reduce loudness** (for dog-friendliness or testing), set `TOMCAT_DUTY=250000` (25 %) in your `.env` per §4.5: less RMS energy in the fundamental, ~6 dB quieter.
 
 **5.4 Sweeping the frequency.** Concept Research (manufacturer of CATWatch) states on conceptresearch.co.uk/products/catwatch: "The CATWatch operates at a frequency of 20 – 24 kHz." Our `burst()` ramps the pigpio hardware-PWM frequency back and forth across 20–24 kHz in 250 Hz steps every 20 ms, reproducing the "modulating" character. Modulation also helps prevent habituation — a static tone is easier for an animal to learn to tolerate than a moving one.
 
@@ -289,7 +347,7 @@ journalctl -u catdeter -f
 - Beam aimed away from dog areas.
 - Dogs **≥ 8 m off-axis** or **≥ 15 m on-axis** when armed.
 - Quiet hours 22:00–07:00 (default in `catdeter.py`) so it never fires at night when dogs are out.
-- Start at reduced volume: `DUTY = 250_000` (25 %) and 12 V rail, not 24 V.
+- Start at reduced volume: `TOMCAT_DUTY=250000` (25 %) and 12 V rail, not 24 V.
 - If the dog shows distress (ears flattening, refusing to enter that area), reduce duty cycle further or reposition.
 
 ### 7. Bill of Materials
@@ -310,14 +368,17 @@ journalctl -u catdeter -f
 | 12 | Universal perfboard | elimex.bg/category/948 ("ПЕЧАТНИ ПЛАТКИ И ТЕКСТОЛИТ") — e.g. product 24400 "ПЛАТКА ELIMEX" | 1 | Cut to fit |
 | 13 | Solderless breadboard 400-tie | elimex.bg/product/76380 (МАКЕТНА ПЛАТКА 400 ГНЕЗДА) | 1 | For prototyping |
 | 14 | Resistor 220 Ω, ¼ W | elimex резистори | 1 | R_g (gate drive) |
-| 15 | Resistor 10 kΩ, ¼ W | as above | 1 | R_pd (pull-down) |
-| 16 | Resistor 33 Ω, ½ W | as above | 1 | R_s (piezo series limiter) |
-| 17 | 1N4148 small-signal diode | elimex диоди | 1 | Flyback / clamp |
-| 18 | 2-way screw terminal 5 mm pitch | elimex съединители | 2 | Power-in, piezo-out |
-| 19 | Dupont jumper wires M-F | elimex hobby section | 1 pack | Pi → breadboard |
-| 20 | Hookup wire (silicone, 22 AWG) | elimex.bg/category/1173-kabeli-i-provodnitsi-montazhni | small reel | Internal wiring |
-| 21 | Small heatsink + thermal pad for Pi 4 | elimex охладители section | 1 | Pi 4 runs warm under continuous PWM duty |
-| 22 | Clear neutral-cure silicone sealant | local hardware store | 1 tube | For sealing horn + PIR through the enclosure |
+| 15 | Resistor 10 kΩ, ¼ W | as above | 2 | R_pd (MOSFET gate pull-down) **and** R_d1 (PIR divider, series leg) |
+| 16 | Resistor 22 kΩ, ¼ W | as above | 1 | R_d2 (PIR divider, leg to GND) |
+| 17 | Resistor 33 Ω, ½ W | as above | 1 | R_s (piezo series limiter) |
+| 18 | Resistor 1 kΩ, ¼ W | as above | 1 | Optional — for the low-frequency PWM sanity test in §8 |
+| 19 | Standard 5 mm LED | elimex светодиоди | 1 | Optional — for the low-frequency PWM sanity test in §8 |
+| 20 | 1N4148 small-signal diode | elimex диоди | 1 | Flyback / clamp |
+| 21 | 2-way screw terminal 5 mm pitch | elimex съединители | 2 | Power-in, piezo-out |
+| 22 | Dupont jumper wires M-F | elimex hobby section | 1 pack | Pi → breadboard |
+| 23 | Hookup wire (silicone, 22 AWG) | elimex.bg/category/1173-kabeli-i-provodnitsi-montazhni | small reel | Internal wiring |
+| 24 | Small heatsink + thermal pad for Pi 4 | elimex охладители section | 1 | Pi 4 runs warm under continuous PWM duty |
+| 25 | Clear neutral-cure silicone sealant | local hardware store | 1 tube | For sealing horn + PIR through the enclosure |
 
 > **Pricing note:** elimex.bg renders prices client-side in JavaScript, so live лв prices were not present in the static page HTML at the time of writing. Open each product URL in your browser to confirm current prices in лв (BGN, with VAT). All URLs above were validated as live elimex.bg product pages with confirmed titles and (where shown in metadata) specs.
 
@@ -353,22 +414,22 @@ journalctl -u catdeter -f
 **Phase 1 — Build at low power and confirm safety for the dogs.**
 1. Buy all parts from elimex.bg per §7. Use the 12 V / 1 A adapter (product 64509), not 18 V/24 V.
 2. Build on a breadboard first; verify the PIR with `pir_test.py` and the ultrasonic output on Spectroid with `tone_sweep.py`.
-3. Install the systemd service with `DUTY = 250_000` (25 % duty, half-volume) and the default 22:00–07:00 quiet hours.
+3. Install the systemd service with `TOMCAT_DUTY=250000` in `.env` (25 % duty, half-volume) and the default 22:00–07:00 quiet hours.
 4. Mount in the garden aimed strictly along the cat-entry path, AWAY from the dogs.
-5. Watch the dogs for one week. Benchmark: if either dog shows ear-flattening, avoidance of garden areas it formerly used, or unexplained anxiety, **lower** duty cycle to 12 % (`125_000`) or reposition further from their habitual areas.
+5. Watch the dogs for one week. Benchmark: if either dog shows ear-flattening, avoidance of garden areas it formerly used, or unexplained anxiety, **lower** duty cycle to 12 % (`TOMCAT_DUTY=125000`) or reposition further from their habitual areas.
 
 **Phase 2 — Tune for cat efficacy.**
-6. After one week, if the dogs are unaffected, raise duty cycle to 50 % (`500_000`). Log how often the SQLite `events` table shows fires per night; benchmark: a healthy install should show 0–5 events/day after week 2 (cats learn to avoid the area).
+6. After one week, if the dogs are unaffected, raise duty cycle to 50 % (`TOMCAT_DUTY=500000`, the default). Log how often the SQLite `events` table shows fires per night; benchmark: a healthy install should show 0–5 events/day after week 2 (cats learn to avoid the area).
 7. If cat visits persist after two weeks at 50 % duty / 12 V, swap to the 12 V / 1.5 A adapter (product 72724) — same voltage, more current headroom — and then consider stepping up to an 18 V adapter from elimex's category 956.
 
 **Phase 3 — Upgrades (optional).**
 8. Add a USB or Pi Camera and modify `catdeter.py` to record a 10-s clip on each fire — gives you evidence of which cats are being deterred.
-9. Add a small Flask dashboard on the Pi (`pip install flask`) that reads the SQLite DB and shows daily / hourly fire counts.
+9. Watch the fire counts on the dashboard (§4.6) and correlate the hour-of-day histogram with when you actually see cats.
 10. v2 PCB: anti-phase H-bridge for +6 dB SPL (two IRLZ44Ns driven from BCM18 + BCM19), and an LC resonance boost on the piezo for another +6 dB.
 
 **Recommendation thresholds that would change the design choice.**
 - If SPL measurement at 1 m falls below ~88 dB → step rail to 18 V before attempting the H-bridge.
-- If dogs show clear discomfort → drop rail to 9 V (elimex stocks 9 V adapters too) and shorten BURST_SECONDS to 2 s.
+- If dogs show clear discomfort → drop rail to 9 V (elimex stocks 9 V adapters too) and shorten the burst to 2 s (`TOMCAT_BURST_SECONDS=2.0`).
 - If false-triggers exceed ~30/day → replace the PIR with a narrower-FOV unit; or aim it through a small cardboard mask to restrict its arc.
 
 ---
@@ -379,6 +440,6 @@ journalctl -u catdeter -f
 - **F28 impedance** is not stated on the elimex page; other Bulgarian retailers list nominally-equivalent F28-class piezo horns at 4–8 Ω marketing ratings, but piezos are dominantly capacitive (~30–80 nF) and the "ohm" rating is largely cosmetic at ultrasonic frequencies.
 - **Pi 4 USB-C PSU on elimex:** elimex's adapter category did not surface a Raspberry-Pi-branded 5.1 V / 3 A USB-C supply during this research; assume you must source this elsewhere or use the official Pi PSU you already own. The 12 V adapter for the emitter stage IS on elimex.
 - **Single-MOSFET drive is single-ended.** Maximum SPL is bounded by the rail voltage. If your real-world measurement falls short of 96 dB / 1 m, raise the rail to 18 V (then re-measure) before adding the anti-phase / H-bridge upgrade.
-- **SEN0018 detection geometry differs from earlier project notes.** DFRobot's official wiki specifies **detect angle 110°** and **detect range 7 m** (not 120° / 6 m as sometimes cited in third-party listings). The OUT pin is "Output level(HIGH): 4V" — directly compatible with a Pi 3.3 V input *as a HIGH* (the Pi treats > 1.8 V as logic-1) but technically 4 V exceeds the 3.3 V GPIO absolute-max-input spec. For a clean implementation, add a simple voltage divider (e.g. 10 kΩ from OUT to GPIO17, 22 kΩ from GPIO17 to GND) to drop the 4 V to ~2.7 V. In practice the SEN0018's output current is limited and many builders connect it directly without damage, but the divider is the formally-correct beginner-safe option.
+- **SEN0018 detection geometry differs from earlier project notes.** DFRobot's official wiki specifies **detect angle 110°** and **detect range 7 m** (not 120° / 6 m as sometimes cited in third-party listings). The OUT pin is "Output level(HIGH): 4V" — directly compatible with a Pi 3.3 V input *as a HIGH* (the Pi treats > 1.8 V as logic-1) but technically 4 V exceeds the 3.3 V GPIO absolute-max-input spec. The divider in §2.3 / §2.4 (10 kΩ from OUT to GPIO17, 22 kΩ from GPIO17 to GND, giving ~2.7 V) is therefore the documented default wiring for this build. Connecting OUT straight to GPIO17 is the alternative: the SEN0018's output current is limited and many builders do it that way without damage, but it is out of spec and not what this guide tells you to build.
 - **Dog tolerance is individual.** Every dog is different — the placement and quiet-hours guidance is conservative but you must observe your own dogs closely for the first week. If you have any breed prone to anxiety, start at 12 % duty cycle.
 - **The peer-reviewed Catwatch© SPL figures** (96 dB / 1 m, 56 dB / 7 m, 44 dB / 13 m) are from the original commercial unit — your build's measured numbers will vary somewhat with horn placement, enclosure, and rail voltage. Measure with a smartphone SPL meter at 1 m as a sanity check; if the reading is wildly off, the most likely culprits are (a) a missing common ground, (b) an IRFZ44N substituted for the IRLZ44N, or (c) the piezo wired with no series resistor and oscillating chaotically.

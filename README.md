@@ -25,8 +25,8 @@ square wave; an **IRLZ44N** logic-level MOSFET switches a piezo horn against a
 ## Hardware in one breath
 
 Raspberry Pi 4 · DFRobot SEN0018 PIR · IRLZ44N MOSFET · F28 piezo horn ·
-12 V DC adapter · 220 Ω / 10 kΩ / 33 Ω resistors · 1N4148 diode · ABS IP66
-enclosure. Full bill of materials with elimex.bg product links in
+12 V DC adapter · 220 Ω / 10 kΩ ×2 / 22 kΩ / 33 Ω resistors · 1N4148 diode ·
+ABS IP66 enclosure. Full bill of materials with elimex.bg product links in
 [docs/BUILD.md §7](docs/BUILD.md).
 
 **Pins used (4 of them):**
@@ -51,7 +51,8 @@ enclosure. Full bill of materials with elimex.bg product links in
 >                        │
 >                       GND
 > ```
-> Recommended default. See [docs/BUILD.md "Caveats"](docs/BUILD.md) for the full reasoning.
+> This is the wiring documented in [docs/BUILD.md §2.3 / §2.4](docs/BUILD.md); see
+> [the Caveats section](docs/BUILD.md) for the full reasoning.
 
 ## Quick start
 
