@@ -16,6 +16,7 @@ square wave; an **IRLZ44N** logic-level MOSFET switches a piezo horn against a
 | Path | What it is |
 |---|---|
 | `src/pir_test.py` | Standalone PIR sanity check |
+| `src/pwm.py` | Thin wrapper over the kernel's `/sys/class/pwm` hardware PWM |
 | `src/tone_sweep.py` | Hardware-PWM 20→24 kHz sweep, for spectrum-analyser verification |
 | `src/catdeter.py` | The main program: PIR → burst, quiet hours, cooldown, SQLite logging |
 | `dashboard/app.py` | Read-only Flask web view: fires/day, hour-of-day histogram, recent events |
@@ -60,8 +61,16 @@ On a fresh Raspberry Pi OS Lite (64-bit):
 
 ```bash
 sudo apt update && sudo apt full-upgrade -y
-sudo apt install -y python3-pip python3-gpiozero pigpio python3-pigpio sqlite3
-sudo systemctl enable --now pigpiod
+sudo apt install -y python3-pip python3-gpiozero python3-lgpio sqlite3
+
+# Enable hardware PWM0 on GPIO18, and free the PWM peripheral from the
+# onboard audio driver, which otherwise claims it. Both need a reboot.
+sudo sh -c 'printf "\ndtoverlay=pwm-2chan\n" >> /boot/firmware/config.txt'
+sudo sed -i 's/^dtparam=audio=on/dtparam=audio=off/' /boot/firmware/config.txt
+sudo reboot
+
+# After the reboot, /sys/class/pwm/pwmchip0 should exist:
+ls /sys/class/pwm/
 
 git clone https://github.com/cargopete/tomcat.git ~/tomcat
 
@@ -69,7 +78,7 @@ git clone https://github.com/cargopete/tomcat.git ~/tomcat
 python3 ~/tomcat/src/pir_test.py
 
 # 2. Test the ultrasonic output (verify with a phone spectrum analyser)
-python3 ~/tomcat/src/tone_sweep.py
+sudo python3 ~/tomcat/src/tone_sweep.py
 
 # 3. Run the full thing as a service
 sudo cp ~/tomcat/systemd/catdeter.service /etc/systemd/system/
@@ -77,6 +86,44 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now catdeter.service
 journalctl -u catdeter -f
 ```
+
+> ### Why no `pigpio`?
+> Earlier versions of this project drove GPIO18 through `pigpio`. That package
+> was **dropped from Debian trixie**, the base of current Raspberry Pi OS. The
+> client pieces (`python3-pigpio`, `pigpio-tools`) are still in the archive but
+> the `pigpiod` daemon they talk to is not, so `pigpio.pi()` connects to
+> nothing and the program silently never makes a sound. We now drive the same
+> SoC peripheral through the kernel's `/sys/class/pwm` interface instead: no
+> daemon, no third-party library, no root-mapped `/dev/mem`. This is why the
+> `dtoverlay=pwm-2chan` line above is not optional.
+
+## Status
+
+Verified on hardware, 22 August 2026, Raspberry Pi 4 Model B, Raspberry Pi OS
+Lite 64-bit (trixie, image 2026-06-18):
+
+- Kernel hardware PWM on GPIO18 produces a frequency-accurate square wave,
+  read back from `period` in sysfs and confirmed with `pinctrl`.
+- The complete drive chain works: GPIO18 → 220 Ω → IRLZ44N gate, drain → 33 Ω →
+  piezo horn → 12 V rail, with a shared ground. Confirmed **by ear**, by
+  dropping the sweep to 3 kHz where a human can hear it.
+- `SIGTERM`, which is what `systemctl stop` sends, now silences the output.
+  Tested rather than assumed, because the first version did not and happily
+  left the horn running after the process had died.
+
+**Not** verified, and worth stating plainly:
+
+- **Acoustic output at 20–24 kHz.** Phone spectrum analysers roll off above
+  roughly 16 kHz and A-weight what is left, so they cannot measure it. No
+  calibrated ultrasonic microphone has been near this build.
+- **Any deterrent effect on any cat.** No cat has been observed. The SPL
+  figures quoted in [docs/BUILD.md](docs/BUILD.md) come from the Nelson et al.
+  study of the commercial CATWatch, not from this device.
+- An audible frequency probe suggested the horn is loudest around 5–8 kHz and
+  falls away above that, which would be poor news for a 20–24 kHz deterrent.
+  That reading was taken from *behind* a directional horn, using ears that roll
+  off across the same band, so it is inconclusive in both directions. It wants
+  following up with a real instrument.
 
 ## Tuning
 

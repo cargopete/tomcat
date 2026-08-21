@@ -1,5 +1,9 @@
 # Install via apt on Raspberry Pi OS Lite (recommended):
-#   sudo apt install -y python3-pigpio python3-gpiozero
+#   sudo apt install -y python3-gpiozero python3-lgpio
 # These are listed here for reference / non-Debian environments.
-pigpio>=1.78
+#
+# pigpio is deliberately absent: it was dropped from Debian trixie, which is
+# the base of current Raspberry Pi OS. PWM now goes through the kernel's own
+# /sys/class/pwm interface instead, which needs no library at all.
 gpiozero>=2.0
+lgpio>=0.2

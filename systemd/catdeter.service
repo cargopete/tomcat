@@ -1,11 +1,13 @@
 [Unit]
 Description=TomCat ultrasonic cat deterrent
-After=network.target pigpiod.service
-Requires=pigpiod.service
+After=network.target
 
 [Service]
 Type=simple
-User=pi
+# Runs as root because the /sys/class/pwm nodes are root-owned. A udev rule
+# granting the gpio group write access would let this drop to User=pi; that
+# has not been done yet. There was a pigpiod dependency here once; pigpio is
+# no longer packaged for Raspberry Pi OS and the PWM now comes from the kernel.
 # Optional: tuning via env vars. Copy .env.example -> .env and edit.
 # The '-' prefix makes the file optional (no failure if it's absent).
 EnvironmentFile=-/home/pi/tomcat/.env

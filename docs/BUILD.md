@@ -13,7 +13,7 @@
 2. **The architecture is sound for the Pi 4.** Per pigpio's author on the Raspberry Pi Forums: "pigpio uses the 500 MHz PLLD as the clock source for the PWM peripheral … For a frequency of 25 kHz the resolution in steps is 250 million divided by 25 thousand, or 10000." 24 kHz is therefore in pigpio's safe zone (the documented hard upper limit is ~30 MHz on the Pi 4). GPIO18 / physical pin 12 is the canonical hardware PWM0 pin.
 3. **The IRLZ44N is genuinely a 3.3-V-drivable switch.** Per the Infineon datasheet, V<sub>GS(th)</sub> is 1.0 V (min) to 2.0 V (max), V<sub>DSS</sub> = 55 V, I<sub>D</sub> = 47 A — so 3.3 V from a Pi GPIO drives it solidly into its low-R<sub>DS(on)</sub> region. Do **not** substitute the elimex IRFZ44N (product 9002): that part needs ~4–10 V on the gate and will not switch fully from 3.3 V.
 4. **The target SPL is reproducible.** The peer-reviewed study "The efficacy of an ultrasonic cat deterrent" in *Applied Animal Behaviour Science* (Nelson et al., doi:10.1016/j.applanim.2005.04.014) measured the original Catwatch© at "21–23 kHz and a volume of 96 dB at 1 m, declining to 56 dB at 7 m and 44 dB at 13 m." With the F28's 93 dB / 1 W / 1 m sensitivity, a 12 V square wave drive sits in the same ballpark; the optional 24 V upgrade gives an extra ~6 dB of margin.
-5. **The "modulating" character is just frequency sweeping in software.** Concept Research (the British manufacturer of CATWatch) states on conceptresearch.co.uk/products/catwatch: "The CATWatch operates at a frequency of 20 – 24 kHz." Software-stepping the pigpio hardware-PWM frequency between 20 kHz and 24 kHz across each burst reproduces that behaviour and helps prevent habituation.
+5. **The "modulating" character is just frequency sweeping in software.** Concept Research (the British manufacturer of CATWatch) states on conceptresearch.co.uk/products/catwatch: "The CATWatch operates at a frequency of 20 – 24 kHz." Software-stepping the hardware-PWM frequency between 20 kHz and 24 kHz across each burst reproduces that behaviour and helps prevent habituation.
 
 ---
 
@@ -69,7 +69,13 @@ The **10 kΩ gate-to-source pull-down** matters: when the Pi is rebooting or the
 
 GPIO18 is the canonical PWM0 pin: the official `dtoverlay=pwm-2chan` overlay defaults to GPIO18 (PWM0) and GPIO19 (PWM1).
 
-**2.2 pigpio hardware PWM range.** Per pigpio's documentation and Joan's confirmation on the Pi Forums: "pigpio uses the 500 MHz PLLD as the clock source for the PWM peripheral … For a frequency of 25 kHz the resolution in steps is 250 million divided by 25 thousand, or 10000." The documented hard upper limit ("Frequencies above 30 MHz are unlikely to work") sits five orders of magnitude above what we need. Duty cycle is expressed as 0–1 000 000 (so 500 000 = 50 %).
+**2.2 Driving the PWM peripheral.** This project originally used `pigpio`, which mapped `/dev/mem` and talked to the BCM2711's PWM block directly. **`pigpio` has since been dropped from Debian trixie**, the base of current Raspberry Pi OS. The client library and `python3-pigpio` are still packaged, but the `pigpiod` daemon they connect to is not, so `pigpio.pi()` returns an object whose `.connected` is False and the program silently produces no sound. Do not build against it.
+
+We reach the same hardware through the kernel instead. Adding `dtoverlay=pwm-2chan` to `/boot/firmware/config.txt` maps **PWM0 to GPIO18** (physical pin 12) and PWM1 to GPIO19, and after a reboot the peripheral appears as `/sys/class/pwm/pwmchip0` with two channels. Frequency is set by writing `period` in nanoseconds (50 000 ns is 20 kHz, 41 666 ns is 24 kHz) and loudness by writing `duty_cycle`, also in nanoseconds. `src/pwm.py` wraps this and keeps duty expressed as 0–1 000 000 so the existing `TOMCAT_DUTY` values carry over unchanged.
+
+One trap worth knowing: **`duty_cycle` may never exceed `period`**, so a downward frequency step must zero the duty before shrinking the period or the kernel rejects the write with `EINVAL`. That is exactly what happens on every descending step of the sweep, and it is unit-tested in `tests/test_pwm.py`.
+
+One more: the onboard analogue audio driver `snd_bcm2835` claims the same peripheral. Set `dtparam=audio=off` in `config.txt`. On a headless build with no speaker you lose nothing.
 
 **2.3 Schematic (redraw-able).**
 
@@ -153,9 +159,15 @@ GPIO18 is the canonical PWM0 pin: the official `dtoverlay=pwm-2chan` overlay def
 ```bash
 ssh pi@catdeter.local
 sudo apt update && sudo apt full-upgrade -y
-sudo apt install -y python3-pip python3-gpiozero pigpio python3-pigpio sqlite3
-sudo systemctl enable --now pigpiod
+sudo apt install -y python3-pip python3-gpiozero python3-lgpio sqlite3
+
+# Enable hardware PWM0 on GPIO18 and stop the audio driver claiming the
+# peripheral. Both take effect on reboot.
+sudo sh -c 'printf "\ndtoverlay=pwm-2chan\n" >> /boot/firmware/config.txt'
+sudo sed -i 's/^dtparam=audio=on/dtparam=audio=off/' /boot/firmware/config.txt
+sudo reboot
 ```
+After the reboot, `ls /sys/class/pwm/` must show `pwmchip0`. If it does not, the overlay did not load and nothing downstream will work.
 
 **Step 3 — Wire on breadboard** per the table in §2.4 (Pi powered off).
 
@@ -205,56 +217,72 @@ while True:
     print("...clear")
 ```
 
-**4.2 `src/tone_sweep.py` — pigpio hardware PWM frequency sweep**
+**4.2 `src/tone_sweep.py` — hardware PWM frequency sweep**
 ```python
 #!/usr/bin/env python3
-"""Sweep 20 kHz -> 24 kHz on GPIO18 (PWM0) using pigpio hardware PWM.
+"""Sweep 20 kHz -> 24 kHz on GPIO18 (PWM0) using the kernel's hardware PWM.
 
 Use a phone spectrum analyser (Spectroid on Android, SpectrumView on iOS)
 within ~50 cm of the horn to confirm a clear peak between 20 and 24 kHz.
 You will not hear anything - that is the entire point. See docs/BUILD.md 4.2.
+
+Requires `dtoverlay=pwm-2chan` in /boot/firmware/config.txt, and root.
+Run: sudo python3 src/tone_sweep.py
 """
+import atexit
+import os
+import signal
+import sys
 import time
 
-import pigpio
+from pwm import HardwarePWM, PWMUnavailable
 
-PWM_GPIO = 18          # BCM18 = pin 12 = hardware PWM0
-F_LOW_HZ = 20_000
-F_HIGH_HZ = 24_000
-SWEEP_STEP = 250       # Hz per tick
-TICK_S = 0.020         # 20 ms per step
-DUTY = 500_000         # 50 %  (range 0..1_000_000)
-
-pi = pigpio.pi()
-if not pi.connected:
-    raise SystemExit("pigpio daemon not running. sudo systemctl start pigpiod")
+PWM_CHIP = int(os.environ.get("TOMCAT_PWM_CHIP", 0))
+PWM_CHANNEL = int(os.environ.get("TOMCAT_PWM_CHANNEL", 0))
+F_LOW_HZ = int(os.environ.get("TOMCAT_F_LOW_HZ", 20_000))
+F_HIGH_HZ = int(os.environ.get("TOMCAT_F_HIGH_HZ", 24_000))
+SWEEP_STEP = int(os.environ.get("TOMCAT_SWEEP_STEP", 250))
+TICK_S = float(os.environ.get("TOMCAT_SWEEP_TICK_S", 0.020))
+DUTY = int(os.environ.get("TOMCAT_DUTY", 500_000))     # 50 % of 1_000_000
 
 try:
-    print("Sweeping. Use Spectroid on your phone to verify 20-24 kHz peaks.")
-    while True:
-        f = F_LOW_HZ
+    pwm = HardwarePWM(PWM_CHIP, PWM_CHANNEL).open()
+except PWMUnavailable as exc:
+    raise SystemExit(str(exc)) from exc
+except PermissionError as exc:
+    raise SystemExit("sysfs PWM needs root: try sudo") from exc
+
+# Both paths matter. atexit covers a clean return and SystemExit; the signal
+# handlers cover SIGTERM from `kill`, which otherwise kills the process and
+# leaves the PWM peripheral happily driving the pin on its own.
+atexit.register(pwm.off)
+for _sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+    signal.signal(_sig, lambda *_: sys.exit(0))
+
+print(f"Sweeping {F_LOW_HZ // 1000}-{F_HIGH_HZ // 1000} kHz on GPIO18 at "
+      f"{DUTY / 10_000:g}% duty. Verify with a phone spectrum analyser.",
+      flush=True)
+
+pwm.set(F_LOW_HZ, DUTY)
+pwm.on()
+
+f = F_LOW_HZ
+direction = +SWEEP_STEP
+while True:
+    pwm.set(f, DUTY)
+    time.sleep(TICK_S)
+    f += direction
+    if f >= F_HIGH_HZ:
+        direction = -SWEEP_STEP
+    if f <= F_LOW_HZ:
         direction = +SWEEP_STEP
-        while True:
-            pi.hardware_PWM(PWM_GPIO, f, DUTY)
-            time.sleep(TICK_S)
-            f += direction
-            if f >= F_HIGH_HZ:
-                direction = -SWEEP_STEP
-            elif f <= F_LOW_HZ:
-                direction = +SWEEP_STEP
-                break
-except KeyboardInterrupt:
-    pass
-finally:
-    pi.hardware_PWM(PWM_GPIO, 0, 0)
-    pi.stop()
 ```
 
 **4.3 `src/catdeter.py` — main program**
 
-See [`../src/catdeter.py`](../src/catdeter.py) for the full, current source. It:
+See [`../src/catdeter.py`](../src/catdeter.py) for the full, current source, and [`../src/pwm.py`](../src/pwm.py) for the sysfs PWM wrapper it sits on. It:
 - detects motion on BCM17,
-- bursts a 20 kHz ↔ 24 kHz sweep on BCM18 (hardware PWM0) via an IRLZ44N switching a piezo horn against 12 V,
+- bursts a 20 kHz ↔ 24 kHz sweep on BCM18 (hardware PWM0, through `/sys/class/pwm`) via an IRLZ44N switching a piezo horn against 12 V,
 - honours quiet hours (no firing at night while dogs are out),
 - enforces a cool-down between bursts to avoid habituation and excess,
 - logs every detection to a local SQLite DB.
@@ -263,12 +291,14 @@ See [`../src/catdeter.py`](../src/catdeter.py) for the full, current source. It:
 ```ini
 [Unit]
 Description=TomCat ultrasonic cat deterrent
-After=network.target pigpiod.service
-Requires=pigpiod.service
+After=network.target
 
 [Service]
 Type=simple
-User=pi
+# Runs as root because the /sys/class/pwm nodes are root-owned. A udev rule
+# granting the gpio group write access would let this drop to User=pi; that
+# has not been done yet. There was a pigpiod dependency here once; pigpio is
+# no longer packaged for Raspberry Pi OS and the PWM now comes from the kernel.
 # Optional: tuning via env vars. Copy .env.example -> .env and edit.
 # The '-' prefix makes the file optional (no failure if it's absent).
 EnvironmentFile=-/home/pi/tomcat/.env
@@ -320,7 +350,7 @@ sudo cp ~/tomcat/systemd/catdeter-dashboard.service /etc/systemd/system/
 sudo systemctl enable --now catdeter-dashboard.service
 ```
 
-**4.7 Forward-looking.** A USB or Pi Camera can record a 10-s clip per detection. A Rust port using `rppal` + the `pigpio` Rust bindings is straightforward later — for now stay on Python.
+**4.7 Forward-looking.** A USB or Pi Camera can record a 10-s clip per detection. A Rust port using `rppal`, which reaches hardware PWM the same sysfs way, is straightforward later — for now stay on Python.
 
 ### 5. The Piezo Drive — Loudness & Correctness
 
@@ -333,7 +363,7 @@ sudo systemctl enable --now catdeter-dashboard.service
 
 **5.3 Duty cycle and harmonics.** A 50 % duty-cycle square wave at 20 kHz has odd harmonics at 60 kHz, 100 kHz … All inaudible to humans, all in the cat-audible range, and the F28 rolls them off naturally above ~30 kHz so we don't waste energy. To **reduce loudness** (for dog-friendliness or testing), set `TOMCAT_DUTY=250000` (25 %) in your `.env` per §4.5: less RMS energy in the fundamental, ~6 dB quieter.
 
-**5.4 Sweeping the frequency.** Concept Research (manufacturer of CATWatch) states on conceptresearch.co.uk/products/catwatch: "The CATWatch operates at a frequency of 20 – 24 kHz." Our `burst()` ramps the pigpio hardware-PWM frequency back and forth across 20–24 kHz in 250 Hz steps every 20 ms, reproducing the "modulating" character. Modulation also helps prevent habituation — a static tone is easier for an animal to learn to tolerate than a moving one.
+**5.4 Sweeping the frequency.** Concept Research (manufacturer of CATWatch) states on conceptresearch.co.uk/products/catwatch: "The CATWatch operates at a frequency of 20 – 24 kHz." Our `burst()` ramps the hardware-PWM frequency back and forth across 20–24 kHz in 250 Hz steps every 20 ms, reproducing the "modulating" character. Modulation also helps prevent habituation — a static tone is easier for an animal to learn to tolerate than a moving one.
 
 ### 6. Weatherproofing, Mounting & Dog-Safe Placement
 
@@ -395,7 +425,7 @@ sudo systemctl enable --now catdeter-dashboard.service
 - Keep the PIR ≥ 30 cm from the warm Pi and away from sun-warmed walls.
 
 **Nothing happens at all.**
-1. `systemctl status pigpiod` — must be active.
+1. `ls /sys/class/pwm/` — `pwmchip0` must exist. If it is missing, `dtoverlay=pwm-2chan` is not in `/boot/firmware/config.txt`, or the Pi has not been rebooted since it was added.
 2. `journalctl -u catdeter -n 50` — read the service log.
 3. Common ground: continuity-beep between Pi pin 6 and the 12 V barrel sleeve.
 4. Pin numbering: code uses **BCM**. BCM17 = physical pin 11, BCM18 = physical pin 12. NOT physical pins 17 / 18.
