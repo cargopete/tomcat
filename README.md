@@ -22,6 +22,8 @@ square wave; an **IRLZ44N** logic-level MOSFET switches a piezo horn against a
 | `dashboard/app.py` | Read-only Flask web view: fires/day, hour-of-day histogram, recent events |
 | `systemd/*.service` | systemd units for the deterrent and (optionally) the dashboard |
 | `docs/BUILD.md` | The complete beginner build guide: electronics, wiring, BOM, weatherproofing, dog safety |
+| `tools/` | Acoustic measurement rig: gated tone probe and lock-in analyser |
+| `docs/MEASUREMENTS.md` | What has been measured, how, and what the numbers do not say |
 
 ## Hardware in one breath
 
