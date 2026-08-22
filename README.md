@@ -111,19 +111,43 @@ Lite 64-bit (trixie, image 2026-06-18):
   Tested rather than assumed, because the first version did not and happily
   left the horn running after the process had died.
 
+Measured acoustically, 22 August 2026, MacBook microphone at 48 kHz placed
+20–30 cm in front of the horn:
+
+- **The horn radiates across 19–22 kHz**, which is the band this whole project
+  depends on. Eleven blind trials, in which the Pi played a randomly chosen
+  subset of frequencies and the detector was asked about all of them without
+  being told which. Detection is a software lock-in: each tone is gated on and
+  off at exactly 5 Hz, and we look for that flicker in a 240 Hz-wide slice, so
+  ordinary room and garden noise does not register. Pooled over 19–22 kHz,
+  tone-playing observations scored a mean of **12.78** (n=14) against **4.96**
+  (n=18) when silent, a permutation test p of **0.00002**.
+- **23 kHz returned null (p = 0.77)**, as predicted: it sits inside the
+  microphone's anti-aliasing rolloff below its 24 kHz Nyquist limit. The method
+  finding nothing exactly where it physically cannot see is the best evidence
+  that it is not manufacturing detections.
+
 **Not** verified, and worth stating plainly:
 
-- **Acoustic output at 20–24 kHz.** Phone spectrum analysers roll off above
-  roughly 16 kHz and A-weight what is left, so they cannot measure it. No
-  calibrated ultrasonic microphone has been near this build.
+- **How loud it is.** The measurement above is uncalibrated and taken through a
+  microphone that rolls off across the band of interest. It establishes that
+  acoustic energy is present at 19–22 kHz. It says nothing about whether that
+  is 95 dB or 55 dB, and therefore nothing about useful range.
+- **Anything above 23 kHz.** Untestable with a 48 kHz sound card. The sweep's
+  upper end is unmeasured either way.
 - **Any deterrent effect on any cat.** No cat has been observed. The SPL
   figures quoted in [docs/BUILD.md](docs/BUILD.md) come from the Nelson et al.
   study of the commercial CATWatch, not from this device.
-- An audible frequency probe suggested the horn is loudest around 5–8 kHz and
-  falls away above that, which would be poor news for a 20–24 kHz deterrent.
-  That reading was taken from *behind* a directional horn, using ears that roll
-  off across the same band, so it is inconclusive in both directions. It wants
-  following up with a real instrument.
+
+Known intermittency: **3 of 11 trials voided themselves** on the mandatory
+5 kHz control, meaning the horn briefly stopped reaching the microphone at a
+frequency it is known to radiate strongly. The prime suspect is the 33 Ω series
+resistor, which at time of writing is bridged with jumper leads rather than
+seated in the breadboard. That wants fixing before any conclusion about range.
+
+An earlier audible probe suggested the horn died above 8 kHz. That was taken
+from *behind* a directional horn using ears that roll off across the same band,
+and the measurement above supersedes it.
 
 ## Tuning
 
