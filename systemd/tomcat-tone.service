@@ -1,0 +1,20 @@
+[Unit]
+Description=TomCat continuous ultrasonic tone (manual on/off, no sensor)
+After=network.target
+
+[Service]
+Type=simple
+# Runs as root: the /sys/class/pwm nodes are root-owned.
+# Deliberately NOT enabled by default. This unit is a switch, not a daemon:
+#   sudo systemctl start  tomcat-tone     # horn on
+#   sudo systemctl stop   tomcat-tone     # horn off
+# `systemctl stop` sends SIGTERM, which tone_sweep.py handles by silencing the
+# PWM. Without that handler the process would die and the peripheral would keep
+# driving the pin, which is a stop you cannot hear fail.
+EnvironmentFile=-/home/pi/tomcat/.env
+ExecStart=/usr/bin/python3 /home/pi/tomcat/src/tone_sweep.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

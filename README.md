@@ -20,7 +20,9 @@ square wave; an **IRLZ44N** logic-level MOSFET switches a piezo horn against a
 | `src/tone_sweep.py` | Hardware-PWM 20→24 kHz sweep, for spectrum-analyser verification |
 | `src/catdeter.py` | The main program: PIR → burst, quiet hours, cooldown, SQLite logging |
 | `dashboard/app.py` | Read-only Flask web view: fires/day, hour-of-day histogram, recent events |
-| `systemd/*.service` | systemd units for the deterrent and (optionally) the dashboard |
+| `systemd/catdeter.service` | Full sensor-driven deterrent (needs the PIR wired) |
+| `systemd/tomcat-tone.service` | Continuous tone, manual on/off, no sensor required |
+| `systemd/catdeter-dashboard.service` | Optional web view over the event log |
 | `docs/BUILD.md` | The complete beginner build guide: electronics, wiring, BOM, weatherproofing, dog safety |
 | `tools/` | Acoustic measurement rig: gated tone probe and lock-in analyser |
 | `docs/MEASUREMENTS.md` | What has been measured, how, and what the numbers do not say |
@@ -150,6 +152,35 @@ seated in the breadboard. That wants fixing before any conclusion about range.
 An earlier audible probe suggested the horn died above 8 kHz. That was taken
 from *behind* a directional horn using ears that roll off across the same band,
 and the measurement above supersedes it.
+
+## Two ways to run it
+
+**Continuous, switched by hand.** No PIR, no sensor wiring, no quiet hours. The
+horn sweeps 20–24 kHz for as long as you leave it on. This is the simplest
+useful configuration and it needs nothing beyond the drive circuit.
+
+```bash
+sudo cp ~/tomcat/systemd/tomcat-tone.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl start tomcat-tone     # horn on
+sudo systemctl stop  tomcat-tone     # horn off
+```
+
+The unit is deliberately not enabled at boot: it is a switch, not a daemon. Add
+`sudo systemctl enable tomcat-tone` if you want it to come back on after a power
+cut.
+
+Two costs worth knowing. There is **no event log**, so the SQLite `events` table
+stays empty and the dashboard has nothing to show, which means you have no data
+to judge whether it works beyond counting cats yourself. And a constant tone
+invites **habituation**: both the CATWatch literature and §5.4 below note that
+animals learn to tolerate a steady source faster than an intermittent one.
+
+**Sensor-driven.** The full `catdeter.service` build: PIR-triggered bursts,
+quiet hours, cool-down between bursts, and every detection logged to SQLite for
+the dashboard. Needs the PIR wired per §2.4 of the build guide. This is the
+configuration the dog-safety guidance assumes, because quiet hours are what
+keeps it silent at night.
 
 ## Tuning
 
