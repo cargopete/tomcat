@@ -1,0 +1,9 @@
+# Lets the panel work the lever, and nothing else.
+#
+# Install to /etc/sudoers.d/tomcat-panel with mode 0440, and validate with
+# `visudo -c -f` first. Deliberately narrow: three exact commands against one
+# named unit, no wildcards. A panel that could run arbitrary systemctl would be
+# a web server with root, which is a different and much worse project.
+pi ALL=(root) NOPASSWD: /usr/bin/systemctl start tomcat-tone
+pi ALL=(root) NOPASSWD: /usr/bin/systemctl stop tomcat-tone
+pi ALL=(root) NOPASSWD: /usr/bin/systemctl restart tomcat-tone

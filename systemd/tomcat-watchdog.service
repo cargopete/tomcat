@@ -1,0 +1,17 @@
+[Unit]
+Description=TomCat watch: records emitter health and reports failures
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+# TOMCAT_DISCORD_WEBHOOK lives here. It is a credential: .env is gitignored and
+# must never reach the repository, which is public.
+EnvironmentFile=-/home/pi/tomcat/.env
+ExecStart=/usr/bin/python3 /home/pi/tomcat/tools/watchdog.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
