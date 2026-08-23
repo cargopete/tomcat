@@ -1,5 +1,5 @@
 [Unit]
-Description=TomCat watch: records emitter health and reports failures
+Description=Spike: watches the emitter, records health, barks on Discord
 After=network-online.target
 Wants=network-online.target
 

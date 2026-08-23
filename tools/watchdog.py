@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keeps watch on the emitter, records what it sees, and shouts when it stops.
+"""Spike: keeps watch on the emitter, records what he sees, and barks when it stops.
 
 The emitter has a known fault: it drops out intermittently. During acoustic
 measurement 3 of 11 trials lost the horn entirely at a frequency it radiates
@@ -36,6 +36,13 @@ UNIT = os.environ.get("TOMCAT_WATCH_UNIT", "tomcat-tone")
 TICK_S = float(os.environ.get("TOMCAT_WATCH_TICK_S", 30))
 DB_PATH = Path(os.environ.get("TOMCAT_HEALTH_DB", Path.home() / "tomcat-health.sqlite3"))
 WEBHOOK = os.environ.get("TOMCAT_DISCORD_WEBHOOK", "").strip()
+# Discord fetches this per-message, so it has to be publicly reachable. The repo
+# is public and the portrait lives in it, which is why this is a raw URL rather
+# than an upload.
+AVATAR = os.environ.get(
+    "TOMCAT_DISCORD_AVATAR",
+    "https://raw.githubusercontent.com/cargopete/tomcat/main/panel/static/spike.png",
+)
 PWM_CHIP = os.environ.get("TOMCAT_PWM_CHIP", "0")
 PWM_CHANNEL = os.environ.get("TOMCAT_PWM_CHANNEL", "0")
 
@@ -135,7 +142,8 @@ def notify(text, colour, fields=None):
     if not WEBHOOK:
         return "no-webhook"
     payload = {
-        "username": "TomCat",
+        "username": "Spike the Bulldog",
+        "avatar_url": AVATAR,
         "embeds": [{
             "title": text,
             "color": colour,
@@ -184,8 +192,9 @@ def main():
     # A watchdog starting up on a Pi that has only just booted means the power
     # came back, which is worth saying out loud.
     if s["uptime_s"] < 300:
-        notify("Pi rebooted, watch resumed", BRASS, fields(s))
-    print(f"watching {UNIT}, state={state}, tick={TICK_S}s, db={DB_PATH}", flush=True)
+        notify("Pi rebooted, Spike is back on watch", BRASS, fields(s))
+    print(f"Spike watching {UNIT}, state={state}, tick={TICK_S}s, db={DB_PATH}",
+          flush=True)
 
     while not stop:
         s = sample()
@@ -223,7 +232,7 @@ def main():
                (now(), "watch-stopped", f"state={state}"))
     db.commit()
     db.close()
-    print("watch stood down", flush=True)
+    print("Spike stood down", flush=True)
     return 0
 
 

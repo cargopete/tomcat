@@ -1,5 +1,5 @@
 [Unit]
-Description=TomCat control panel
+Description=Spike: the emitter control panel
 After=network-online.target tailscaled.service
 Wants=network-online.target
 

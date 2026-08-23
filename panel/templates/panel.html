@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TomCat · emitter watch</title>
+<title>Spike · emitter watch</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -53,6 +53,11 @@ body{
   color:transparent; text-shadow:0 1px 0 rgb(0 0 0 / .55);
 }
 .sub{color:var(--ink-faint);font-size:10px;letter-spacing:.22em;text-transform:uppercase;margin:4px 0 0}
+.brand{display:flex;align-items:center;gap:14px}
+/* A portrait plate, bolted on like everything else here. */
+.portrait{border:1px solid var(--seam-lit);border-radius:2px;background:var(--inset);
+  padding:2px;box-shadow:inset 0 1px 0 rgb(240 216 145 / .07),0 8px 18px -12px rgb(0 0 0 / .9);
+  display:block}
 header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:24px}
 
 .plate{
@@ -156,9 +161,13 @@ td.detail{color:var(--ink-dim)}
 
 <div class="wrap">
   <header>
-    <div>
-      <h1 class="nameplate">TomCat</h1>
-      <p class="sub">Emitter watch · {{ d.unit }}</p>
+    <div class="brand">
+      <img class="portrait" src="{{ url_for('static', filename='spike.png') }}"
+           alt="Spike, a bulldog, looking unimpressed" width="58" height="51">
+      <div>
+        <h1 class="nameplate">Spike</h1>
+        <p class="sub">Emitter watch · {{ d.unit }}</p>
+      </div>
     </div>
     <div style="text-align:right">
       <div class="cap">Pi uptime</div>
@@ -302,7 +311,7 @@ td.detail{color:var(--ink-dim)}
         <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="var(--ink-faint)" stroke-width="1">
           <path d="M3 12h4l3-7 4 14 3-7h4"/>
         </svg>
-        Nothing recorded yet. The watchdog writes a reading every thirty seconds once it is running.
+        Nothing recorded yet. Spike takes a reading every thirty seconds once he is on watch.
       </div>
       {% endif %}
     </div>
@@ -342,7 +351,7 @@ td.detail{color:var(--ink-dim)}
         <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="var(--ink-faint)" stroke-width="1">
           <path d="M5 4h11l3 3v13H5z"/><path d="M8 10h8M8 14h5"/>
         </svg>
-        The ledger is empty. Entries appear when the emitter changes state.
+        Nothing in the ledger yet. Spike writes an entry whenever the emitter changes state.
       </div>
       {% endif %}
     </div>
