@@ -237,8 +237,19 @@ td.detail{color:var(--ink-dim)}
             </button>
           </form>
           <p class="lever-note">
-            {% if d.enabled_at_boot %}Resumes by itself after a power cut{% else %}Will not resume after a power cut{% endif %}
+            {%- if d.sched.window -%}
+              Runs {{ d.sched.window }} · {{ d.sched.next_action }} at {{ d.sched.next_at }},
+              in {{ d.sched.next_in_m // 60 }} h {{ d.sched.next_in_m % 60 }} m
+            {%- else -%}
+              No schedule set
+            {%- endif -%}
           </p>
+          {% if d.off_schedule %}
+          <p class="lever-note" style="color:var(--ember)">
+            Off schedule: the clock says it should be
+            {{ 'running' if d.sched.should_run else 'stopped' }}
+          </p>
+          {% endif %}
         </div>
 
       </div>

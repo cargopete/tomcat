@@ -18,6 +18,7 @@ import os
 import sqlite3
 import subprocess
 from datetime import datetime, timedelta
+from datetime import time as dtime
 from pathlib import Path
 
 from flask import Flask, jsonify, redirect, render_template, url_for
@@ -33,7 +34,43 @@ PORT = int(os.environ.get("TOMCAT_PANEL_PORT", 8090))
 # real limits: the Pi 4 begins throttling at 80 °C.
 TEMP_MIN, TEMP_MAX = 30.0, 85.0
 SWEEP_DEG = 125          # -125 to +125 reads as an instrument; 360 does not.
+NIGHT_START_H = int(os.environ.get("TOMCAT_NIGHT_START_H", 23))
+NIGHT_END_H = int(os.environ.get("TOMCAT_NIGHT_END_H", 10))
 CX, CY = 100.0, 105.0    # gauge centre, in the SVG's own coordinates
+
+
+def schedule():
+    """What the clock says, and when it next has an opinion.
+
+    Reported alongside the actual state rather than instead of it, so a lever
+    thrown by hand outside the window shows up as a disagreement rather than
+    being quietly papered over.
+    """
+    if NIGHT_START_H == NIGHT_END_H:
+        return {"window": None, "should_run": None, "next_at": None,
+                "next_action": None, "next_in_m": None}
+    now = datetime.now()
+    if NIGHT_START_H < NIGHT_END_H:
+        should = NIGHT_START_H <= now.hour < NIGHT_END_H
+    else:
+        should = now.hour >= NIGHT_START_H or now.hour < NIGHT_END_H
+
+    # The next boundary is whichever of the two comes first from now.
+    nxt = None
+    for h, action in ((NIGHT_START_H, "starts"), (NIGHT_END_H, "stops")):
+        cand = datetime.combine(now.date(), dtime(hour=h))
+        if cand <= now:
+            cand += timedelta(days=1)
+        if nxt is None or cand < nxt[0]:
+            nxt = (cand, action)
+    delta = int((nxt[0] - now).total_seconds() // 60)
+    return {
+        "window": f"{NIGHT_START_H:02d}:00-{NIGHT_END_H:02d}:00",
+        "should_run": should,
+        "next_at": nxt[0].strftime("%H:%M"),
+        "next_action": nxt[1],
+        "next_in_m": delta,
+    }
 
 
 def gauge_ticks():
@@ -161,9 +198,15 @@ def snapshot():
     frac = None
     if t is not None:
         frac = min(1.0, max(0.0, (t - TEMP_MIN) / (TEMP_MAX - TEMP_MIN)))
+    sched = schedule()
     return {
         **s,
         **stats,
+        "sched": sched,
+        # True only when the clock and the hardware disagree, which is worth
+        # showing rather than hiding.
+        "off_schedule": (sched["should_run"] is not None
+                         and sched["should_run"] != s["unit_active"]),
         "temp_frac": frac,
         "needle_deg": round(-SWEEP_DEG + 2 * SWEEP_DEG * frac, 1) if frac is not None else None,
         "ticks": gauge_ticks(),

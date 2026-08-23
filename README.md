@@ -182,6 +182,35 @@ the dashboard. Needs the PIR wired per §2.4 of the build guide. This is the
 configuration the dog-safety guidance assumes, because quiet hours are what
 keeps it silent at night.
 
+## Running it nights
+
+Cats come at night, so the emitter runs nights. `tomcat-schedule.timer` fires at
+both boundaries and `tools/schedule.py` reconciles: it reads the clock, works out
+whether the emitter ought to be running, and makes it so.
+
+```bash
+sudo install -m644 systemd/tomcat-schedule.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now tomcat-schedule.timer
+sudo systemctl disable tomcat-tone     # the schedule owns it now, not the boot sequence
+```
+
+That last line matters. With `tomcat-tone` enabled at boot *and* a schedule, a
+power cut at three in the afternoon brings the horn on in daylight. Disabling it
+and letting `Persistent=true` on the timer catch up at boot gets both cases
+right: a power cut at 02:00 resumes the horn, one at 14:00 does not.
+
+Reconciling rather than running separate start and stop jobs is what makes the
+awkward paths come out right, because the decision comes from the clock rather
+than from which trigger happened to fire. It also runs **only** at the
+boundaries and at boot catch-up, never on a short interval, so a lever thrown by
+hand at two in the afternoon sticks until the next boundary instead of being
+undone ten minutes later. When the clock and the hardware disagree, the panel
+says so rather than hiding it.
+
+Window is `TOMCAT_NIGHT_START_H` / `TOMCAT_NIGHT_END_H`, defaulting to 23 and 10.
+Setting them equal disables the schedule.
+
 ## Tuning
 
 Every knob has a sane default in `src/catdeter.py` and can be overridden with a

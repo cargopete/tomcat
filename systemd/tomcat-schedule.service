@@ -1,0 +1,10 @@
+[Unit]
+Description=Put the emitter where the clock says it should be
+After=network.target
+
+[Service]
+Type=oneshot
+# Root, because it starts and stops another unit. It is a oneshot that runs for
+# well under a second at two moments a day.
+EnvironmentFile=-/home/pi/tomcat/.env
+ExecStart=/usr/bin/python3 /home/pi/tomcat/tools/schedule.py

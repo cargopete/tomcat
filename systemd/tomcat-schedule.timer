@@ -1,0 +1,16 @@
+[Unit]
+Description=Emitter night schedule: on at 23:00, off at 10:00
+
+[Timer]
+# One timer, both boundaries. The reconciler consults the clock rather than
+# the trigger, so it does the right thing whichever one fired.
+OnCalendar=*-*-* 23:00:00
+OnCalendar=*-*-* 10:00:00
+# If the Pi was off when a boundary passed, run once on boot to catch up. This
+# is what makes a power cut resume the horn at 02:00 and leave it alone at
+# 14:00, without tomcat-tone itself being enabled at boot.
+Persistent=true
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
