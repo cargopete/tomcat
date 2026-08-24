@@ -158,21 +158,35 @@ def db():
 
 
 def watch_stats():
-    """Derived from the watchdog's samples. All of it is absent-tolerant: with
-    no database yet, every figure is None and the template says NO SIGNAL."""
+    """Liveness during the scheduled operating hours over the last 24 hours.
+
+    Daytime samples are deliberately silent, so treating them as downtime
+    would make the coverage figure mostly a measure of the schedule.  Limit
+    this to the same window the emitter is expected to run in instead.
+    """
     empty = {"samples_24h": None, "live_24h": None, "coverage": None,
              "faults_24h": None, "last_sample": None, "events": []}
+    if NIGHT_START_H == NIGHT_END_H:
+        return empty
     conn = db()
     if conn is None:
         return empty
     try:
         since = (datetime.now() - timedelta(hours=24)).isoformat(timespec="seconds")
+        start = f"{NIGHT_START_H:02d}:00:00"
+        end = f"{NIGHT_END_H:02d}:00:00"
+        window = "time(ts) >= ? AND time(ts) < ?"
+        window_args = (start, end)
+        if NIGHT_START_H > NIGHT_END_H:
+            window = "(time(ts) >= ? OR time(ts) < ?)"
         row = conn.execute(
             "SELECT count(*) n,"
             "       sum(state = 'live') live,"
             "       sum(state = 'fault') fault,"
             "       max(ts) last"
-            "  FROM health WHERE ts >= ?", (since,)).fetchone()
+            f"  FROM health WHERE ts >= ? AND {window}",
+            (since, *window_args),
+        ).fetchone()
         events = [dict(r) for r in conn.execute(
             "SELECT ts, kind, detail FROM events ORDER BY ts DESC LIMIT 12")]
         n = row["n"] or 0

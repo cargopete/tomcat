@@ -303,8 +303,8 @@ td.detail{color:var(--ink-dim)}
   <!-- ============ the watch ============ -->
   <section class="plate riveted" style="margin-top:18px">
     <div class="strip">
-      <span class="lbl">The watch · last 24 hours</span>
-      <span class="rd">{% if d.last_sample %}last reading {{ d.last_sample }}{% else %}no readings{% endif %}</span>
+      <span class="lbl">The watch · {{ d.sched.window or 'no schedule' }}, last 24 hours</span>
+      <span class="rd">{% if d.last_sample %}last scheduled reading {{ d.last_sample }}{% else %}no scheduled readings{% endif %}</span>
     </div>
     <div class="body">
       {% if d.coverage is not none %}
@@ -316,13 +316,13 @@ td.detail{color:var(--ink-dim)}
         <i class="{{ 'bad' if d.coverage < 50 else 'low' if d.coverage < 90 else '' }}"
            style="width:{{ d.coverage }}%"></i>
       </div>
-      <div class="cap">{{ d.live_24h }} of {{ d.samples_24h }} readings found the pin driven</div>
+      <div class="cap">{{ d.live_24h }} of {{ d.samples_24h }} scheduled readings found the pin driven</div>
       {% else %}
       <div class="empty">
         <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="var(--ink-faint)" stroke-width="1">
           <path d="M3 12h4l3-7 4 14 3-7h4"/>
         </svg>
-        Nothing recorded yet. Spike takes a reading every thirty seconds once he is on watch.
+        Nothing recorded in the scheduled window yet. Spike takes a reading every thirty seconds once he is on watch.
       </div>
       {% endif %}
     </div>
