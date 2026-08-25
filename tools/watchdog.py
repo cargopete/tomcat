@@ -190,9 +190,17 @@ def main():
                (now(), "watch-started", f"state={state} uptime={s['uptime_s']}s"))
     db.commit()
     # A watchdog starting up on a Pi that has only just booted means the power
-    # came back, which is worth saying out loud.
+    # came back, which is worth saying out loud. Record it as well as sending
+    # it: an outage that leaves no ledger entry is one you cannot audit later,
+    # and this Pi has no RTC, so the timestamp on a just-booted sample is
+    # whatever fake-hwclock restored until NTP corrects it. uptime_s is the
+    # only trustworthy figure at this moment, which is why it goes in the note.
     if s["uptime_s"] < 300:
-        notify("Pi rebooted, Spike is back on watch", BRASS, fields(s))
+        sent = notify("Pi rebooted, Spike is back on watch", BRASS, fields(s))
+        db.execute("INSERT INTO events(ts,kind,detail) VALUES(?,?,?)",
+                   (now(), "rebooted",
+                    f"uptime={s['uptime_s']}s at first sample | discord: {sent}"))
+        db.commit()
     print(f"Spike watching {UNIT}, state={state}, tick={TICK_S}s, db={DB_PATH}",
           flush=True)
 
