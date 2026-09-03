@@ -72,8 +72,25 @@ class HardwarePWM:
     def on(self):
         self._write("enable", 1)
 
+    def silence(self):
+        """Stop driving the pin, but leave period and duty alone.
+
+        This is the gating primitive: one file write instead of two, and it
+        keeps the frequency loaded so the next on() resumes instantly. Used
+        thousands of times an hour in aggressive mode, so the difference is
+        worth having.
+        """
+        try:
+            self._write("enable", 0)
+        except OSError:
+            pass
+
     def off(self):
-        """Silence the output. Safe to call from a signal handler or twice."""
+        """Fully idle the output. Safe to call from a signal handler or twice.
+
+        Unlike silence(), this also zeroes the duty cycle, which is what you
+        want on the way out rather than between bursts.
+        """
         try:
             self._write("enable", 0)
             self._write("duty_cycle", 0)
