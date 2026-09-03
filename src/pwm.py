@@ -37,6 +37,11 @@ class HardwarePWM:
         self.chipdir = pathlib.Path(f"/sys/class/pwm/pwmchip{chip}")
         self.channel = channel
         self.path = self.chipdir / f"pwm{channel}"
+        # What we last wrote, so set() can skip writes that change nothing and
+        # avoid the duty-zeroing dance unless the period is actually shrinking
+        # past the loaded duty.
+        self._period = 0
+        self._duty = 0
 
     def open(self):
         if not self.chipdir.exists():
@@ -61,13 +66,27 @@ class HardwarePWM:
         (self.path / name).write_text(str(value))
 
     def set(self, hz, duty):
-        """Set frequency in Hz at the given duty (0..DUTY_RANGE)."""
+        """Set frequency in Hz at the given duty (0..DUTY_RANGE).
+
+        The kernel rejects a duty_cycle larger than period with EINVAL, which
+        is why the naive version zeroes the duty before every period change.
+        That is correct and, done two hundred times a second, audible: each
+        momentary zero is a step discontinuity, and a step contains energy at
+        every frequency including the ones humans hear. So the zeroing now
+        happens only when it is actually needed, which is when the new period
+        would fall below the duty currently loaded.
+        """
         period = int(1_000_000_000 / hz)
-        # duty_cycle may never exceed period, so it goes to zero before the
-        # period shrinks, or the kernel rejects the write with EINVAL.
-        self._write("duty_cycle", 0)
-        self._write("period", period)
-        self._write("duty_cycle", period * duty // DUTY_RANGE)
+        want = period * duty // DUTY_RANGE
+        if period < self._duty:
+            self._write("duty_cycle", 0)
+            self._duty = 0
+        if period != self._period:
+            self._write("period", period)
+            self._period = period
+        if want != self._duty:
+            self._write("duty_cycle", want)
+            self._duty = want
 
     def on(self):
         self._write("enable", 1)
@@ -94,5 +113,6 @@ class HardwarePWM:
         try:
             self._write("enable", 0)
             self._write("duty_cycle", 0)
+            self._duty = 0
         except OSError:
             pass

@@ -52,16 +52,52 @@ def test_set_at_24khz(fake):
     assert read(p.path, "duty_cycle") == "20833"
 
 
-def test_duty_zeroed_before_period_shrinks(fake):
-    """The kernel rejects duty_cycle > period, so duty must go to 0 first."""
+def test_duty_never_exceeds_period(fake):
+    """The invariant the kernel actually enforces, checked across a sweep.
+
+    EINVAL if duty_cycle > period, so this must hold after every single call
+    regardless of which direction the frequency moved.
+    """
+    p, _ = fake
+    for hz in list(range(20_000, 24_001, 250)) + list(range(24_000, 19_999, -250)):
+        p.set(hz, DUTY_RANGE // 2)
+        assert int(read(p.path, "duty_cycle")) <= int(read(p.path, "period")), f"at {hz} Hz"
+
+
+def test_duty_is_zeroed_only_when_the_period_must_shrink_past_it(fake):
+    """Zeroing is correct but audible, so it happens only when needed.
+
+    Writing duty_cycle=0 mid-stream is a step discontinuity, and a step is
+    broadband: done on every update it is heard as clicking over an otherwise
+    ultrasonic carrier. So the guard fires only when the incoming period would
+    actually fall below the duty already loaded.
+    """
     p, writes = fake
+
+    # 90 % duty at 20 kHz loads duty=45000 against period=50000. Moving to
+    # 24 kHz wants period=41666, which is below that duty, so it must zero.
+    p.set(20_000, 900_000)
+    writes.clear()
+    p.set(24_000, 900_000)
+    assert [n for n, _ in writes][0] == "duty_cycle"
+    assert writes[0][1] == "0", "must clear the duty before shrinking past it"
+
+    # 50 % duty at 20 kHz loads duty=25000, comfortably under the 41666 the
+    # higher frequency needs, so no zeroing and no audible edge.
     p.set(20_000, DUTY_RANGE // 2)
     writes.clear()
-    p.set(24_000, DUTY_RANGE // 2)   # shorter period than the previous duty
+    p.set(24_000, DUTY_RANGE // 2)
+    assert "0" not in [v for n, v in writes if n == "duty_cycle"], \
+        f"needless zeroing: {writes}"
 
-    names = [n for n, _ in writes]
-    assert names == ["duty_cycle", "period", "duty_cycle"]
-    assert writes[0][1] == "0"
+
+def test_repeated_identical_set_writes_nothing(fake):
+    """A no-op update should touch no files at all: fewer writes, fewer edges."""
+    p, writes = fake
+    p.set(21_000, DUTY_RANGE // 2)
+    writes.clear()
+    p.set(21_000, DUTY_RANGE // 2)
+    assert writes == [], f"rewrote unchanged values: {writes}"
 
 
 def test_quarter_duty(fake):
