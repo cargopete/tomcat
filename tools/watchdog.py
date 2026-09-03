@@ -136,9 +136,17 @@ def open_db():
     return db
 
 
-def notify(text, colour, fields=None):
+def notify(text, colour, fields=None, attempts=3):
     """Post to Discord. Never raises: a watchdog that dies of a failed HTTP
-    call is worse than useless, so a failure is recorded and swallowed."""
+    call is worse than useless, so a failure is recorded and swallowed.
+
+    Retries, because the single most important message this sends is the one
+    most likely to fail. The reboot notice fires seconds after boot, when
+    systemd considers the network online but wlan0 has not associated and DNS
+    is not answering yet, so it dies with `[Errno -3] Temporary failure in name
+    resolution`. That happened twice on 3 September and both times the message
+    about a power failure was the message lost to the power failure.
+    """
     if not WEBHOOK:
         return "no-webhook"
     payload = {
@@ -156,11 +164,20 @@ def notify(text, colour, fields=None):
         data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json", "User-Agent": "tomcat-watchdog"},
     )
-    try:
-        with urllib.request.urlopen(req, timeout=10) as r:
-            return f"ok {r.status}"
-    except (urllib.error.URLError, OSError, TimeoutError) as e:
-        return f"failed: {e}"
+    last = None
+    for attempt in range(attempts):
+        if attempt:
+            # 5s, 15s, 45s ... capped. Enough to outlast Wi-Fi association and
+            # the first DNS answers without stalling the sampling loop for long.
+            time.sleep(min(5 * 3 ** (attempt - 1), 60))
+        try:
+            with urllib.request.urlopen(req, timeout=10) as r:
+                if attempt:
+                    return f"ok {r.status} after {attempt + 1} tries"
+                return f"ok {r.status}"
+        except (urllib.error.URLError, OSError, TimeoutError) as e:
+            last = e
+    return f"failed after {attempts} tries: {last}"
 
 
 def fields(s):
@@ -196,7 +213,8 @@ def main():
     # whatever fake-hwclock restored until NTP corrects it. uptime_s is the
     # only trustworthy figure at this moment, which is why it goes in the note.
     if s["uptime_s"] < 300:
-        sent = notify("Pi rebooted, Spike is back on watch", BRASS, fields(s))
+        sent = notify("Pi rebooted, Spike is back on watch", BRASS, fields(s),
+                      attempts=6)
         db.execute("INSERT INTO events(ts,kind,detail) VALUES(?,?,?)",
                    (now(), "rebooted",
                     f"uptime={s['uptime_s']}s at first sample | discord: {sent}"))

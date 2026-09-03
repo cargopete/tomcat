@@ -1,10 +1,15 @@
 [Unit]
-Description=Emitter night schedule: on at 23:00, off at 10:00
+Description=Emitter night schedule: on at 22:00, off at 10:00
 
 [Timer]
 # One timer, both boundaries. The reconciler consults the clock rather than
 # the trigger, so it does the right thing whichever one fired.
-OnCalendar=*-*-* 23:00:00
+#
+# These two times MUST match TOMCAT_NIGHT_START_H / TOMCAT_NIGHT_END_H in .env.
+# The window lives in the env vars; the timer only decides when to go and look.
+# If they drift apart the reconciler runs at the wrong moment and the emitter
+# sits in the wrong state for hours. Change both or neither.
+OnCalendar=*-*-* 22:00:00
 OnCalendar=*-*-* 10:00:00
 # If the Pi was off when a boundary passed, run once on boot to catch up. This
 # is what makes a power cut resume the horn at 02:00 and leave it alone at

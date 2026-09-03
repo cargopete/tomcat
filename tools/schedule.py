@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Put the emitter where the clock says it should be.
 
-Cats come at night, so the emitter runs nights: on at 23:00, off at 10:00.
+Cats come at night, so the emitter runs nights: on at 22:00, off at 10:00.
 This is a reconciler rather than a pair of start/stop jobs. It reads the clock,
 works out whether the emitter ought to be running, and makes it so. That single
 property is what makes every awkward path come out right:
 
   * A power cut at 02:00 resumes the horn on boot, because the window says so.
   * A power cut at 14:00 does not, for the same reason.
-  * A missed 23:00 trigger (Pi off, or asleep) is caught by the timer's
+  * A missed 22:00 trigger (Pi off, or asleep) is caught by the timer's
     Persistent=true, and the reconciler still does the correct thing whichever
     boundary was missed, because it consults the clock rather than the trigger.
 
@@ -26,7 +26,7 @@ import subprocess
 import sys
 
 UNIT = os.environ.get("TOMCAT_WATCH_UNIT", "tomcat-tone")
-START_H = int(os.environ.get("TOMCAT_NIGHT_START_H", 23))
+START_H = int(os.environ.get("TOMCAT_NIGHT_START_H", 22))
 END_H = int(os.environ.get("TOMCAT_NIGHT_END_H", 10))
 
 

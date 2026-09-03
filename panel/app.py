@@ -34,7 +34,7 @@ PORT = int(os.environ.get("TOMCAT_PANEL_PORT", 8090))
 # real limits: the Pi 4 begins throttling at 80 °C.
 TEMP_MIN, TEMP_MAX = 30.0, 85.0
 SWEEP_DEG = 125          # -125 to +125 reads as an instrument; 360 does not.
-NIGHT_START_H = int(os.environ.get("TOMCAT_NIGHT_START_H", 23))
+NIGHT_START_H = int(os.environ.get("TOMCAT_NIGHT_START_H", 22))
 NIGHT_END_H = int(os.environ.get("TOMCAT_NIGHT_END_H", 10))
 CX, CY = 100.0, 105.0    # gauge centre, in the SVG's own coordinates
 

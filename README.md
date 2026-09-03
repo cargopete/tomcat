@@ -208,7 +208,7 @@ hand at two in the afternoon sticks until the next boundary instead of being
 undone ten minutes later. When the clock and the hardware disagree, the panel
 says so rather than hiding it.
 
-Window is `TOMCAT_NIGHT_START_H` / `TOMCAT_NIGHT_END_H`, defaulting to 23 and 10.
+Window is `TOMCAT_NIGHT_START_H` / `TOMCAT_NIGHT_END_H`, defaulting to 22 and 10.
 Setting them equal disables the schedule.
 
 ## Tuning
